@@ -13,3 +13,11 @@ inspect
 nm -gC ./libgolang_allocator_module.so 
 
 ```
+
+dependancies
+
+mesos
+protobuf
+boost
+glog
+curl-dev
