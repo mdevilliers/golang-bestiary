@@ -2,26 +2,34 @@ package vagrant
 
 import (
 	"encoding/json"
+	"github.com/jonboulle/clockwork"
 	"golang.org/x/net/context"
 	"hash/crc64"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"sort"
 	"time"
 )
 
+type JsonDownloader func(url string) ([]byte, error)
+
 type VagrantShareRemoteWatcher struct {
 	url             string
-	Updated         chan *VagrantShareDescripter
+	Updated         chan *VagrantBoxDescripter
+	OnError         chan error
 	periodInSeconds time.Duration
+	jsonGetter      JsonDownloader
+	clock           clockwork.Clock
 }
 
 func NewWatcher(url string) *VagrantShareRemoteWatcher {
 	return &VagrantShareRemoteWatcher{
 		url:             url,
-		Updated:         make(chan *VagrantShareDescripter),
+		Updated:         make(chan *VagrantBoxDescripter),
+		OnError:         make(chan error),
 		periodInSeconds: time.Second * 60,
+		jsonGetter:      jsonGetter,
+		clock:           clockwork.NewRealClock(),
 	}
 }
 
@@ -36,51 +44,61 @@ func (v *VagrantShareRemoteWatcher) loop(ctx context.Context) {
 
 	for {
 
-		checkSum, descriptor, err := v.downloadJson(table)
+		go func() {
+			checkSum, descriptor, err := v.downloadJson(table)
 
-		if err != nil {
-			log.Fatalln(err.Error())
-		} else {
-			log.Print(checkSum)
-			if lastCheckSum != checkSum {
-				v.Updated <- descriptor
-				lastCheckSum = checkSum
+			if err != nil {
+				v.OnError <- err
+			} else {
+
+				if lastCheckSum != checkSum {
+
+					v.Updated <- descriptor
+					lastCheckSum = checkSum
+				}
 			}
-		}
+		}()
 
 		select {
 
 		case <-ctx.Done():
 			return
 
-		case <-time.After(v.periodInSeconds):
-
+		case <-v.clock.After(v.periodInSeconds):
+			// continue
 		}
 	}
 }
 
-func (v *VagrantShareRemoteWatcher) downloadJson(table *crc64.Table) (uint64, *VagrantShareDescripter, error) {
+func (v *VagrantShareRemoteWatcher) downloadJson(table *crc64.Table) (uint64, *VagrantBoxDescripter, error) {
 
-	response, err := http.Get(v.url)
-
-	if err != nil {
-		return 0, nil, err
-	}
-	defer response.Body.Close()
-
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := v.jsonGetter(v.url)
 
 	if err != nil {
 		return 0, nil, err
 	}
 	checksum64 := crc64.Checksum(body, table)
 
-	var descripter VagrantShareDescripter
+	var descripter VagrantBoxDescripter
+
 	json.Unmarshal(body, &descripter)
+
 	return checksum64, &descripter, nil
 }
 
-type VagrantShareDescripter struct {
+func jsonGetter(url string) ([]byte, error) {
+
+	response, err := http.Get(url)
+
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	return ioutil.ReadAll(response.Body)
+}
+
+type VagrantBoxDescripter struct {
 	Name        string
 	Description string
 	Versions    Versions
