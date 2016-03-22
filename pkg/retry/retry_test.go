@@ -50,7 +50,6 @@ func TestRetryCancel(t *testing.T) {
 		cancel()
 		wg.Done()
 
-		//
 		return errors.New("!")
 	}
 
