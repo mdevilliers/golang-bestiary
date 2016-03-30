@@ -76,15 +76,15 @@ func (ca *ContextAuthority) isTokenValidAndContainsRole(signedTokenAsString, rol
 		return authenticationVerifyKey, nil
 	})
 
+	if token.Valid {
+		_, ok := token.Claims[role]
+		return ok, nil
+	}
+
 	// TODO add some leeway on parsing
 	ve, ok := err.(*jwt.ValidationError)
 	if !ok {
 		return false, ve
-	}
-
-	if token.Valid {
-		_, ok := token.Claims[role]
-		return ok, nil
 	}
 
 	panic("SignedToken is neither valid or invalid")
