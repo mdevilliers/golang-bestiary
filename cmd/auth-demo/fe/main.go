@@ -2,60 +2,58 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"net/url"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	auth "github.com/mdevilliers/golang-bestiary/pkg/auth-token"
 	pb "github.com/mdevilliers/golang-bestiary/cmd/auth-demo/proto"
+	auth "github.com/mdevilliers/golang-bestiary/pkg/auth-token"
 )
 
 const (
-	svc1address    = "localhost:50051"
-	svc1servername = "waterzooi.test.google.be"
+	authServerAddress = "localhost:50000"
+	svc1address       = "localhost:50051"
+	svc1servername    = "waterzooi.test.google.be"
 )
 
 func main() {
 
 	fmt.Println("fe svc running...")
 
-	// create an authentication token
-	signer, err := auth.NewTokenSigner("../keys/auth.rsa")
+	log.Println("authenticating...")
+	authServiceRequestURL := fmt.Sprintf("http://%s/authenticate", authServerAddress)
 
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	
-	token := auth.NewToken(
-		map[string]interface{}{
-    		"role1": true,
-    		"role2": true,
-    		"role3": true,
-    		"role4": true,
-		},
-	)
-	
-	// sign the token
-	signedToken, err := signer.Sign(token)
+	resp, err := http.PostForm(authServiceRequestURL,
+		url.Values{"username": {"mark"}, "password": {"secret"}})
 
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	// construct a context with the signed token
+	defer resp.Body.Close()
+	token, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	log.Println("calling service 1...")
+
 	ctxMarshaller := auth.NewContextMarshaller(context.Background())
-	ctx := ctxMarshaller.Marshal(signedToken)
-	
+	ctx := ctxMarshaller.MarshalTrustedString(string(token))
+
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	// make remote call over TLS
 	creds, err := credentials.NewClientTLSFromFile("../keys/ca.pem", svc1servername)
 
 	if err != nil {

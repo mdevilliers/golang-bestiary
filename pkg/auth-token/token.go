@@ -3,12 +3,11 @@ package authtoken
 import (
 	"crypto/rsa"
 	"errors"
-	
+	"time"
+		
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
-	"io/ioutil"
-	"time"
 )
 
 var (
@@ -43,20 +42,8 @@ type TokenSigner struct {
 	key *rsa.PrivateKey
 }
 
-func NewTokenSigner(pathToPrivateKey string) (*TokenSigner, error) {
-
-	signingBytes, err := ioutil.ReadFile(pathToPrivateKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	key, err := jwt.ParseRSAPrivateKeyFromPEM(signingBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TokenSigner{key: key}, nil
+func NewTokenSigner(signingKey *rsa.PrivateKey) (*TokenSigner) {
+	return &TokenSigner{key: signingKey}
 }
 
 // Sign will take a Token and return a SignedToken
@@ -95,6 +82,13 @@ type ContextMarshaller struct {
 // Marshal appends a signed token to a context
 func (cm *ContextMarshaller) Marshal(token *SignedToken) context.Context {
 	md := metadata.Pairs(tokenContextName, token.encryptedToken)
+	ctx := metadata.NewContext(cm.ctx, md)
+	return ctx
+}
+
+// MarshalTrustedString appends a token of trusted origin to a context
+func (cm *ContextMarshaller) MarshalTrustedString(token string) context.Context {
+	md := metadata.Pairs(tokenContextName, token)
 	ctx := metadata.NewContext(cm.ctx, md)
 	return ctx
 }

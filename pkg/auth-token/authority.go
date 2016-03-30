@@ -1,12 +1,14 @@
 package authtoken
 
 import (
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
 	"github.com/dgrijalva/jwt-go"
-	"fmt"
+
 )
 
 type Authority interface {
@@ -14,15 +16,40 @@ type Authority interface {
 } 
 
 type ContextAuthority struct {
-	pathToPublicKey string
+	publicKeyBytes []byte
 	ctx             context.Context
 }
 
-func NewContextAuthority(pathToPublicKey string, ctx context.Context) Authority {
-	return &ContextAuthority{
-		pathToPublicKey: pathToPublicKey,
-		ctx:             ctx,
+func NewContextAuthorityFromFile(pathToPublicKey string, ctx context.Context) (Authority,error) {
+	
+	publicKeyBytes, err := ioutil.ReadFile(pathToPublicKey)
+	if err != nil {
+		return nil, err
 	}
+	
+	return &ContextAuthority{
+		publicKeyBytes: publicKeyBytes,
+		ctx:             ctx,
+	}, nil
+}
+
+func NewContextAuthorityFromURL(url string, ctx context.Context) (Authority,error){
+	
+	resp, err := http.Get(url)
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	defer resp.Body.Close()
+    // TODO : validate - is this really a Public Key
+	publicKeyBytes, err := ioutil.ReadAll(resp.Body)
+	
+	return &ContextAuthority{
+		publicKeyBytes: publicKeyBytes,
+		ctx:             ctx,
+	}, nil
+	
 }
 
 // IsInRole will inspect the context for a token, validate it, and signal if the
@@ -51,16 +78,10 @@ func (ca *ContextAuthority) IsInRole(role string) (bool, error) {
 }
 
 // isTokenValidAndContainsRole checks if token for a role if valid, not expired and uses the correct signing method
-// does a lot rather than exposing the token
+// suffer a performance penalty rather than exposing the token
 func (ca *ContextAuthority) isTokenValidAndContainsRole(signedTokenAsString, role string) (bool, error) {
 
-	// NOTE : loads keys on every request
-	verifyBytes, err := ioutil.ReadFile(ca.pathToPublicKey)
-	if err != nil {
-		return false, err
-	}
-
-	authenticationVerifyKey, err := jwt.ParseRSAPublicKeyFromPEM(verifyBytes)
+	authenticationVerifyKey, err := jwt.ParseRSAPublicKeyFromPEM(ca.publicKeyBytes)
 	if err != nil {
 		return false, err
 	}
@@ -86,7 +107,7 @@ func (ca *ContextAuthority) isTokenValidAndContainsRole(signedTokenAsString, rol
 	if !ok {
 		return false, ve
 	}
-
+	
 	panic("SignedToken is neither valid or invalid")
 
 }
