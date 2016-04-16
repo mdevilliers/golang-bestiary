@@ -125,7 +125,7 @@ func (au *authenticationServer) rotateKeys(w http.ResponseWriter, r *http.Reques
 func generateNewPrivateKey() (*rsa.PrivateKey, error) {
 
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	
+
 	if err != nil {
 		return nil, err
 	}

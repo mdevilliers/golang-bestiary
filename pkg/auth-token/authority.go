@@ -4,52 +4,51 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	
+
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/metadata"
-	"github.com/dgrijalva/jwt-go"
-
 )
 
 type Authority interface {
-	 IsInRole(role string) (bool, error)
-} 
+	IsInRole(role string) (bool, error)
+}
 
 type ContextAuthority struct {
 	publicKeyBytes []byte
-	ctx             context.Context
+	ctx            context.Context
 }
 
-func NewContextAuthorityFromFile(pathToPublicKey string, ctx context.Context) (Authority,error) {
-	
+func NewContextAuthorityFromFile(pathToPublicKey string, ctx context.Context) (Authority, error) {
+
 	publicKeyBytes, err := ioutil.ReadFile(pathToPublicKey)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &ContextAuthority{
 		publicKeyBytes: publicKeyBytes,
-		ctx:             ctx,
+		ctx:            ctx,
 	}, nil
 }
 
-func NewContextAuthorityFromURL(url string, ctx context.Context) (Authority,error){
-	
+func NewContextAuthorityFromURL(url string, ctx context.Context) (Authority, error) {
+
 	resp, err := http.Get(url)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	defer resp.Body.Close()
-    // TODO : validate - is this really a Public Key
+	// TODO : validate - is this really a Public Key
 	publicKeyBytes, err := ioutil.ReadAll(resp.Body)
-	
+
 	return &ContextAuthority{
 		publicKeyBytes: publicKeyBytes,
-		ctx:             ctx,
+		ctx:            ctx,
 	}, nil
-	
+
 }
 
 // IsInRole will inspect the context for a token, validate it, and signal if the
@@ -107,7 +106,7 @@ func (ca *ContextAuthority) isTokenValidAndContainsRole(signedTokenAsString, rol
 	if !ok {
 		return false, ve
 	}
-	
+
 	panic("SignedToken is neither valid or invalid")
 
 }
